@@ -5,7 +5,28 @@
 Select     = require("soupselect").select
 HtmlParser = require "htmlparser"
 
+class WebUrls
+  constructor: (@robot) ->
+    @cache = {}
+    
+    @robot.brain.on 'loaded', =>
+      if @robot.brain.data.weburls
+        @cache = @robot.brain.data.weburls
+
+  add: (url, title) ->
+    @cache[url] ?= title
+    @robot.brain.data.weburls = @cache
+
+  summary: ->
+    s = []
+    for key,val of @cache
+      s.push(key + " (" + val + ")")
+    return s
+
+
 module.exports = (robot) ->
+  urls = new WebUrls robot
+
   robot.hear /(http|ftp|https):\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?/i, (msg) ->
     url = msg.match[0]
     httpResponse = (url) ->
@@ -20,11 +41,15 @@ module.exports = (robot) ->
             parser.parseComplete body
             results = (Select handler.dom, "head title")
             if results[0]
-              msg.send results[0].children[0].data.replace(/(\r\n|\n|\r)/gm,"")
+              title = results[0].children[0].data.replace(/(\r\n|\n|\r)/gm,"")
+              msg.send title
+              urls.add(url, title)
             else
               results = (Select handler.dom, "title")
               if results[0]
-                msg.send results[0].children[0].data.replace(/(\r\n|\n|\r)/gm,"")
+                title = results[0].children[0].data.replace(/(\r\n|\n|\r)/gm,"")
+                msg.send title
+                urls.add(url, title)
           else
             msg.send "Error " + res.statusCode
 
@@ -48,3 +73,9 @@ module.exports = (robot) ->
       httpBitlyResponse(url)
     else
       httpResponse(url)
+  
+  robot.respond /urls ?(\S+[^-\s])?$/i, (msg) ->
+    s = urls.summary()
+    msg.send "Recent URLs:"
+    for i of s
+      msg.send s[i]
