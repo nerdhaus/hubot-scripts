@@ -7,19 +7,25 @@ HtmlParser = require "htmlparser"
 
 class WebUrls
   constructor: (@robot) ->
-    @cache = {}
-    
+    @cache = {
+      urls: []
+      users: []
+    }
+    @robot.brain.data.weburls = @cache
+
     @robot.brain.on 'loaded', =>
       if @robot.brain.data.weburls
         @cache = @robot.brain.data.weburls
 
   add: (url, title) ->
-    @cache[url] ?= title
+    @cache.urls[url] ?= title
+    if @cache.urls.length > 10
+      @cache.urls.shift
     @robot.brain.data.weburls = @cache
 
   summary: ->
     s = []
-    for key,val of @cache
+    for key,val of @cache.urls
       s.push(key + " (" + val + ")")
     return s
 
