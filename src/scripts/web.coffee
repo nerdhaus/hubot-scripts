@@ -17,16 +17,32 @@ class WebUrls
       if @robot.brain.data.weburls
         @cache = @robot.brain.data.weburls
 
-  add: (url, title) ->
+  add: (url, title, user) ->
+    if not @cache.users[user]
+      @cache.users[user] = []
     @cache.urls[url] ?= title
     if @cache.urls.length > 10
       @cache.urls.shift
+    @cache.users[user][url] ?= title
+    if @cache.users[user].length > 10
+      @cache.users[user].shift
     @robot.brain.data.weburls = @cache
 
   summary: ->
     s = []
     for key,val of @cache.urls
-      s.push(key + " (" + val + ")")
+      s.unshift(key + " (" + val + ")")
+    s.unshift("Recently mentioned URLs:")
+    return s
+
+  userSummary: (userName) ->
+    s = []
+    if @cache.users[userName]
+      for key,val of @cache.users[userName]
+        s.unshift(key + " (" + val + ")")
+      s.unshift("URLs mentioned by " + userName + ":")
+    else
+      s.unshift(userName + " hasn't mentioned any URLs lately.")
     return s
 
 
@@ -35,6 +51,7 @@ module.exports = (robot) ->
 
   robot.hear /(http|ftp|https):\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?/i, (msg) ->
     url = msg.match[0]
+    sender   = msg.message.user.name.toLowerCase()
     httpResponse = (url) ->
       msg
         .http(url)
@@ -55,7 +72,7 @@ module.exports = (robot) ->
               if results[0]
                 title = results[0].children[0].data.replace(/(\r\n|\n|\r)/gm,"")
                 msg.send title
-                urls.add(url, title)
+                urls.add(url, title, sender)
           else
             msg.send "Error " + res.statusCode
 
@@ -81,7 +98,10 @@ module.exports = (robot) ->
       httpResponse(url)
   
   robot.respond /urls ?(\S+[^-\s])?$/i, (msg) ->
-    s = urls.summary()
-    msg.send "Recent URLs:"
+    if msg.match[1]
+      s = urls.userSummary(msg.match[1])
+    else
+      s = urls.summary()
+
     for i of s
       msg.send s[i]
